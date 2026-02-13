@@ -120,7 +120,7 @@ MAKO is designed to work alongside existing standards, not replace them:
 
 ### Open Source
 - **mako-spec** — This specification (you are here)
-- **mako-js** — JavaScript library for parsing/generating MAKO files + CEF *(coming soon)*
+- **[mako-js](https://github.com/juanisidoro/mako-js)** — JavaScript library for parsing/generating MAKO files + CEF ([npm](https://www.npmjs.com/package/@mako-spec/js))
 - **mako-cli** — Command-line validator and generator *(coming soon)*
 - **mako-wp** — WordPress plugin *(coming soon)*
 
