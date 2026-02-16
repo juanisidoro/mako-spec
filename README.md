@@ -59,10 +59,21 @@ updated: 2026-02-13
 tokens: 280
 language: en
 
+media:
+  cover:
+    url: "https://example.com/images/air-max-90.jpg"
+    alt: "Nike Air Max 90"
+  images: 4
+
 actions:
   - name: add_to_cart
     description: "Add product to shopping cart"
     endpoint: /api/cart
+    method: POST
+    params:
+      - name: id
+        type: integer
+        required: true
 
 links:
   internal:
@@ -71,6 +82,10 @@ links:
   external:
     - url: https://nike.com/air-max-90
       context: "Official manufacturer page"
+
+related:
+  - /product/adidas-ultraboost
+  - /product/new-balance-1080
 ---
 
 # Nike Air Max 90
@@ -97,6 +112,15 @@ Strength: price. Weakness: narrow fit per reviews.
 | One llms.txt per site | One MAKO file **per page** |
 | Auto-converted markdown | **Semantically optimized** content |
 | No action discovery | Actions declared in frontmatter |
+| No site-level discovery | `/.well-known/mako` endpoint |
+
+## Dogfooding
+
+The MAKO website itself serves MAKO content via content negotiation. Try it:
+
+```bash
+curl -H "Accept: text/mako+markdown" https://makospec.vercel.app/
+```
 
 ## Built to Complement, Not Compete
 
@@ -120,9 +144,13 @@ MAKO is designed to work alongside existing standards, not replace them:
 
 ### Open Source
 - **mako-spec** — This specification (you are here)
-- **[mako-js](https://github.com/juanisidoro/mako-js)** — JavaScript library for parsing/generating MAKO files + CEF ([npm](https://www.npmjs.com/package/@mako-spec/js))
-- **mako-cli** — Command-line validator and generator *(coming soon)*
-- **mako-wp** — WordPress plugin *(coming soon)*
+- **[mako-js](https://github.com/juanisidoro/mako-js)** — TypeScript SDK: parse, generate, validate MAKO files + CEF encode/decode + Express middleware ([npm v0.2.0](https://www.npmjs.com/package/@mako-spec/js))
+- **[mako-cli](https://github.com/juanisidoro/mako-cli)** — CLI validator, inspector, and scaffolding tool ([npm v0.2.0](https://www.npmjs.com/package/@mako-spec/cli))
+- **[mako-wp](https://github.com/juanisidoro/mako-wp)** — WordPress plugin v1.7.0: content negotiation, WooCommerce, AI BYOK, dashboard
+- **[mako-site](https://github.com/juanisidoro/mako-site)** — Landing, URL Analyzer, MAKO Score auditor, public directory ([makospec.vercel.app](https://makospec.vercel.app))
+
+### MAKO Score
+Online auditor that evaluates how AI-ready a website is (0-100). Uses the **DTRA framework** (Discoverable, Readable, Trustworthy, Actionable) with 30 checks across 4 categories. Try it at [makospec.vercel.app/score](https://makospec.vercel.app/en/score).
 
 ### Content Types Supported
 - `product` — E-commerce product pages
@@ -148,31 +176,50 @@ MAKO is designed to work alongside existing standards, not replace them:
 
 ## Getting Started
 
-### For website owners
+### For WordPress sites
 
-Add MAKO support to your site:
+Install the [mako-wp](https://github.com/juanisidoro/mako-wp) plugin — zero code required:
+
+1. Upload `mako-wp` to `/wp-content/plugins/` and activate
+2. Go to Settings > MAKO to configure
+3. Click "Generate All Missing" in the Dashboard
+
+Your site now serves MAKO content via content negotiation, including WooCommerce products.
+
+### For Node.js / Express / Next.js
 
 ```bash
-# Install the CLI
-npm install -g @mako-spec/cli
+npm install @mako-spec/js
+```
 
-# Generate MAKO files for your site
-mako generate https://your-site.com
-
-# Validate your MAKO files
-mako validate ./mako-files/
+```typescript
+import { makoMiddleware } from '@mako-spec/js/middleware';
+app.use(makoMiddleware({ provider: yourMakoProvider }));
 ```
 
 ### For AI agent developers
 
-Request MAKO content:
-
 ```bash
-# Check if a page supports MAKO
+# Check if a page supports MAKO (headers only)
 curl -I https://example.com/page -H "Accept: text/mako+markdown"
 
 # Download MAKO content
 curl https://example.com/page -H "Accept: text/mako+markdown"
+```
+
+### CLI tools
+
+```bash
+npm install -g @mako-spec/cli
+
+# Validate MAKO files
+mako validate ./mako-files/ --strict
+
+# Inspect a MAKO file
+mako inspect ./product.mako.md
+
+# Scaffold a new MAKO file
+mako init --type product --entity "My Product"
 ```
 
 ## Contributing
