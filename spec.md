@@ -1,7 +1,9 @@
 # MAKO Specification v0.1.0
 
 **Status:** Draft
-**Last Updated:** 2026-02-13
+**Last Updated:** 2026-02-16
+
+> **Versioning note:** `v0.1.0` is the version of this *specification document*. The protocol version used in MAKO frontmatter is `"1.0"` (the `mako` field). These are distinct: the document version tracks spec revisions, while the protocol version identifies the format that agents negotiate. When the protocol itself introduces breaking changes, the frontmatter version will increment.
 
 ## 1. Introduction
 
@@ -60,6 +62,86 @@ A MAKO file is a UTF-8 encoded Markdown document with a YAML frontmatter block. 
 | `tags` | array | No | Content tags/categories |
 | `audience` | string | No | Target audience (e.g., `"developers"`, `"consumers"`) |
 | `freshness` | string | No | Content freshness: `"realtime"`, `"daily"`, `"weekly"`, `"static"` |
+| `media` | object | No | Available media on the source page (see Section 2.5) |
+
+### 2.5 Media Metadata
+
+The `media` field describes what media types are available on the source HTML page. It serves two purposes: a representative image (`cover`) that agents can display directly, and counts that convey the visual richness of the source page.
+
+#### Schema
+
+```yaml
+media:
+  cover:                # Optional. ONE representative image of the page
+    url: string         # Relative or absolute URL to the image
+    alt: string         # Semantic description of the image
+  images: integer       # Total content images (excluding icons/UI)
+  video: integer        # Total video elements
+  audio: integer        # Total audio elements
+  interactive: integer  # Interactive elements (configurators, calculators, 3D viewers)
+  downloads: integer    # Downloadable files (PDFs, datasets)
+```
+
+All fields within `media` are optional. Only include count fields with non-zero values. Counts refer to the source HTML page, not the MAKO representation.
+
+#### Cover Image
+
+The `cover` field provides a single representative image that an agent can display as a thumbnail or preview in a conversational interface. Only one image — if the agent needs more, it has `canonical` to access the full page.
+
+The cover source depends on the content type:
+
+| Type | Cover Source |
+|------|-------------|
+| `product` | Product featured image |
+| `article` | Featured image / post thumbnail |
+| `landing` | Hero banner or `og:image` |
+| `listing` | Category image or first product thumbnail |
+| `recipe` | Photo of the finished dish |
+| `profile` | Avatar / profile photo |
+| `event` | Poster or event banner |
+| `docs` / `faq` | Generally none (omit `cover`) |
+
+#### Examples
+
+**Product:**
+
+```yaml
+media:
+  cover:
+    url: /uploads/bolso-roma-frontal.webp
+    alt: "Bolso Bandolera Roma - Piel Natural"
+  images: 5
+  video: 1
+```
+
+**Article:**
+
+```yaml
+media:
+  cover:
+    url: /uploads/guia-running-2026.webp
+    alt: "Guía completa de zapatillas running 2026"
+  images: 8
+```
+
+**Landing:**
+
+```yaml
+media:
+  cover:
+    url: /uploads/banner-nueva-coleccion.webp
+    alt: "Nueva Colección Primavera Verano 2026"
+  images: 47
+  video: 1
+  interactive: 2
+```
+
+**Docs (no cover):**
+
+```yaml
+media:
+  images: 3
+```
 
 ### 2.4 Markdown Body
 
@@ -70,7 +152,20 @@ The body MUST follow these principles:
 3. **Prefer lists and key-value pairs** — Over prose paragraphs when presenting factual data.
 4. **Include context and comparisons** — Help the LLM understand relative positioning (competitors, alternatives, trade-offs).
 5. **Omit navigation, legal boilerplate, and UI text** — Only include substantive content.
-6. **Keep it concise** — Target 200-500 tokens for most pages. Never exceed 1,000 tokens.
+6. **Keep it concise** — Never exceed 1,000 tokens. Recommended ranges by type:
+
+| Type | Tokens | Rationale |
+|------|--------|-----------|
+| `product` | 200–400 | Facts, pricing, context. No marketing fluff. |
+| `article` | 300–500 | Summary, key points, context. |
+| `landing` | 300–500 | Value prop, features, pricing, alternatives. |
+| `listing` | 200–400 | Overview, top items, filters. |
+| `recipe` | 300–500 | Ingredients, steps, notes. |
+| `profile` | 150–300 | Bio, key info, notable work. |
+| `event` | 200–300 | Date, location, description, registration. |
+| `docs` | 300–500 | Overview, usage, parameters. |
+| `faq` | 200–400 | Question-answer pairs. |
+| `custom` | 200–500 | Adapt to content. |
 
 ## 3. Actions
 
@@ -348,21 +443,89 @@ Servers SHOULD advertise MAKO support in HTML pages using:
 <link rel="alternate" type="text/mako+markdown" href="/page.mako.md">
 ```
 
-Servers MAY also provide a MAKO sitemap at `/.well-known/mako.json`:
+Servers MAY also provide a discovery endpoint at `/.well-known/mako`:
 
 ```json
 {
   "mako": "1.0",
-  "pages": [
-    {
-      "url": "/product/shoes",
-      "type": "product",
-      "tokens": 280,
-      "updated": "2026-02-13"
-    }
-  ]
+  "site": "example.com",
+  "content_negotiation": true,
+  "html_embedding": true,
+  "accept": "text/mako+markdown",
+  "spec": "https://makospec.vercel.app"
 }
 ```
+
+The discovery endpoint declares **site-level** MAKO capabilities. Required fields: `mako` (protocol version) and `site` (domain). All other fields are optional.
+
+For **page-level** discovery, servers SHOULD use a standard sitemap or a dedicated MAKO sitemap (e.g., `/mako-sitemap.json`) listing individual pages with their type, token count, and last update date.
+
+### 6.4 HTML Embedding
+
+MAKO content MAY be embedded directly in HTML pages using a `<script>` tag in the document `<head>`. This allows agents that parse HTML to extract MAKO content without content negotiation, enabling immediate adoption without requiring changes from LLM providers or crawlers.
+
+```html
+<head>
+  <script type="text/mako+markdown">
+---
+mako: "1.0"
+type: product
+entity: "Bolso Bandolera Roma"
+updated: 2026-02-14
+tokens: 210
+language: es
+summary: "Bolso bandolera artesanal en piel natural, diseño italiano."
+media:
+  cover:
+    url: /uploads/bolso-roma-frontal.webp
+    alt: "Bolso Bandolera Roma - Piel Natural"
+  images: 5
+  video: 1
+actions:
+  - name: add_to_cart
+    description: "Añadir al carrito"
+links:
+  internal:
+    - url: /bolsos/bandolera
+      context: "Todos los bolsos bandolera, 23 modelos"
+      type: parent
+---
+
+# Bolso Bandolera Roma
+
+Bolso bandolera artesanal en piel natural italiana.
+Diseño compacto para uso diario con cierre magnético.
+
+## Key Facts
+
+- **Precio:** €89.90
+- **Material:** Piel vacuno natural, curtido vegetal
+- **Colores:** Cognac, Negro, Camel
+- **Stock:** Disponible (envío 24-48h)
+
+## Context
+
+Gama media de Moniisima. Más compacto que Florencia (€119).
+Piel natural vs sintética en competidores a precio similar.
+  </script>
+</head>
+```
+
+#### Why HTML Embedding
+
+HTML embedding follows the same adoption pattern as JSON-LD:
+
+1. **Works today** — LLMs and crawlers already parse HTML. No protocol changes needed.
+2. **Publisher controlled** — The publisher decides exactly what the agent sees.
+3. **Progressive enhancement** — HTML embedding coexists with content negotiation. Agents that support `Accept: text/mako+markdown` get the optimized response; agents that only parse HTML still find the MAKO content in the `<script>` tag.
+
+#### Rules
+
+1. The `<script>` tag MUST use `type="text/mako+markdown"`. Browsers ignore unknown script types.
+2. The content MUST be a complete, valid MAKO file (YAML frontmatter + markdown body).
+3. The embedded content SHOULD match what the server would return via content negotiation.
+4. If both HTML embedding and content negotiation are available, agents SHOULD prefer content negotiation (lower bandwidth).
+5. There MUST be at most one `<script type="text/mako+markdown">` tag per page.
 
 ## 7. HTTP Headers
 
@@ -421,11 +584,52 @@ A MAKO file is valid if:
 
 ## 10. Security Considerations
 
+### 10.1 Transport Security
+
 - MAKO files MUST be served over HTTPS
-- Embedding vectors MUST NOT encode personally identifiable information
-- Servers SHOULD respect `robots.txt` directives for MAKO content
 - MAKO files SHOULD NOT contain credentials, API keys, or secrets
 - Action endpoints declared in MAKO SHOULD require their own authentication
+- Servers SHOULD respect `robots.txt` directives for MAKO content
+
+### 10.2 Untrusted Embeddings
+
+The `X-Mako-Embedding` header is provided by the content publisher and MUST be treated as **untrusted input**. Embeddings are a hint for pre-filtering, not a guarantee of relevance or quality.
+
+Consumers SHOULD:
+
+1. Generate their own embeddings from the received MAKO content
+2. Use the publisher's embedding only for approximate pre-filtering (e.g., HEAD request triage)
+3. Never use publisher-provided embeddings as the sole input for final ranking or recommendations
+
+This is analogous to HTML `<meta name="description">`: publishers declare it, but search engines verify and may override it based on actual content.
+
+### 10.3 Content Authenticity
+
+MAKO does not provide built-in mechanisms to verify that the MAKO representation is faithful to the source HTML. **This is intentional.**
+
+MAKO is a content format and delivery protocol. Verification of content authenticity is the responsibility of consumers, just as it is for HTML:
+
+- **Search engines and crawlers** that already index HTML can compare it against MAKO responses from the same URL
+- **LLM providers** can fetch both representations and cross-validate
+- **Third-party trust services** may emerge as an optional ecosystem layer
+
+MAKO does not attempt to solve content trust because any self-declared integrity mechanism (hashes, signatures, verification headers) can be trivially gamed by a publisher who controls both the HTML and the MAKO response. The protocol provides verifiable content; it does not provide verification.
+
+### 10.4 Spam and Manipulation
+
+Publishers can generate arbitrary MAKO content, including:
+
+- Optimized embeddings that match popular queries but link to low-quality content
+- Inflated `media` counts or misleading `type` classifications
+- High-volume URL generation with programmatic MAKO responses
+
+Consumers MUST implement their own spam detection, quality scoring, and ranking mechanisms — the same defenses they apply to HTML content today. MAKO does not change the threat model; it changes the delivery format.
+
+### 10.5 Embedding Privacy
+
+- Embedding vectors represent semantic content, not source text — the original text cannot be reconstructed from an embedding
+- Embedding vectors MUST NOT encode personally identifiable information
+- Servers MUST NOT embed user-specific information in CEF vectors
 
 ## 11. Privacy Considerations
 

@@ -163,9 +163,23 @@ These thresholds are advisory. Agents MAY adjust based on their specific require
 
 ## 8. Security Considerations
 
+### 8.1 Privacy
+
 - CEF embeddings represent semantic content, not source text — the original text cannot be reconstructed from an embedding
 - Embedding vectors SHOULD be generated from the MAKO content only, not from private data
 - Servers MUST NOT embed user-specific information in CEF vectors
+
+### 8.2 Trust Model
+
+CEF embeddings are **publisher-declared** and MUST be treated as untrusted by consumers. A publisher can serve an embedding optimized for popular queries while the actual MAKO content is unrelated or low-quality.
+
+Consumers SHOULD:
+
+1. Use CEF embeddings only for approximate pre-filtering (e.g., deciding whether to download the full MAKO response via a HEAD request)
+2. Generate their own embeddings from the actual MAKO body for final ranking and similarity decisions
+3. Never rely solely on publisher-provided embeddings for content quality assessment
+
+See spec.md Section 10.2 for the full security model.
 
 ## 9. Pseudocode Reference
 
