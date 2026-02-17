@@ -6,8 +6,15 @@ updated: 2026-02-10
 tokens: 195
 language: en
 summary: "Technical overview of WebAssembly for web developers, covering use cases, performance, and getting started"
+canonical: "https://example.com/blog/intro-to-webassembly"
 audience: developers
 freshness: monthly
+
+media:
+  cover:
+    url: /uploads/wasm-overview-2026.webp
+    alt: "Introduction to WebAssembly - technical overview"
+  images: 3
 
 actions:
   - name: share

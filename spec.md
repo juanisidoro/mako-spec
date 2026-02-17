@@ -544,20 +544,42 @@ HTML embedding follows the same adoption pattern as JSON-LD:
 
 See [headers.md](headers.md) for the complete HTTP headers reference.
 
-### 7.1 Response Headers Summary
+MAKO uses [RFC 2119](https://datatracker.ietf.org/doc/html/rfc2119) keywords to classify response headers into three levels. This classification ensures that a minimal MAKO response is lightweight, while allowing servers to progressively enhance with standard HTTP caching and advanced features.
 
-| Header | Required | Description |
-|--------|----------|-------------|
-| `X-Mako-Version` | Yes | Spec version |
-| `X-Mako-Tokens` | Yes | Token count of body |
-| `X-Mako-Type` | Yes | Content type |
-| `X-Mako-Lang` | Yes | Content language |
-| `X-Mako-Embedding` | No | CEF-encoded embedding vector |
-| `X-Mako-Embedding-Model` | No | Embedding model identifier |
-| `X-Mako-Embedding-Dim` | No | Embedding dimensions |
-| `X-Mako-Actions` | No | Comma-separated action names |
+### 7.1 Required (MUST)
 
-Servers SHOULD also include standard HTTP caching headers (`ETag`, `Cache-Control`, `Last-Modified`, `Vary: Accept`). These replace the need for custom headers for freshness, update timestamps, and canonical URLs — see [headers.md](headers.md) for details.
+Without these headers, the response is not a valid MAKO response. They provide the minimum metadata an agent needs to identify the format, evaluate relevance, and make pre-download decisions.
+
+| Header | Description | Example |
+|--------|-------------|---------|
+| `Content-Type` | Identifies the MAKO format | `text/mako+markdown; charset=utf-8` |
+| `X-Mako-Version` | Protocol version for negotiation | `1.0` |
+| `X-Mako-Tokens` | Token budget — agent decides if it can afford to read | `280` |
+| `X-Mako-Type` | Content type — agent filters by category | `product` |
+| `X-Mako-Lang` | Language — agent filters by locale | `es` |
+| `Vary` | CDN correctness — ensures HTML and MAKO are cached separately | `Accept` |
+
+### 7.2 Recommended (SHOULD)
+
+Standard HTTP headers that improve caching, conditional requests, and interoperability. MAKO does not reinvent these — it reuses existing HTTP semantics.
+
+| Header | Description | Example |
+|--------|-------------|---------|
+| `ETag` | Content fingerprint for conditional requests (`If-None-Match` → 304) | `"mako-a1b2c3"` |
+| `Cache-Control` | Caching strategy (see `freshness` mapping in [headers.md](headers.md)) | `public, max-age=86400` |
+| `Last-Modified` | Last content update timestamp | `Mon, 30 Jan 2023 00:00:00 GMT` |
+| `Content-Location` | Canonical URL of the HTML version | `https://example.com/page` |
+
+### 7.3 Optional (MAY)
+
+Extra metadata for advanced agent capabilities. Not required for a valid response, but adds value for discovery and semantic matching.
+
+| Header | Description | Example |
+|--------|-------------|---------|
+| `X-Mako-Actions` | Comma-separated action names — capability discovery in HEAD | `add_to_cart, share` |
+| `X-Mako-Embedding` | CEF-encoded embedding vector — semantic pre-filtering without body | `H4sIAAAA...` |
+| `X-Mako-Embedding-Model` | Embedding model identifier (REQUIRED if `X-Mako-Embedding` is present) | `mako-cef-v1` |
+| `X-Mako-Embedding-Dim` | Embedding dimensions (REQUIRED if `X-Mako-Embedding` is present) | `512` |
 
 ## 8. Compact Embedding Format (CEF)
 

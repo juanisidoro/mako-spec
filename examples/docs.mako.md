@@ -6,6 +6,7 @@ updated: 2026-01-15
 tokens: 210
 language: en
 summary: "How to write and use middleware in Express.js, with examples"
+canonical: "https://example.com/docs/middleware"
 audience: developers
 freshness: monthly
 

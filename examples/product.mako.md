@@ -1,4 +1,6 @@
 ---
+# @mako — Machine-Accessible Knowledge Object
+# Spec: https://makospec.vercel.app
 mako: "1.0"
 type: product
 entity: "Nike Air Max 90"
@@ -6,6 +8,15 @@ updated: 2026-02-13
 tokens: 245
 language: en
 summary: "Mid-range casual running shoe by Nike, 79.99 EUR"
+canonical: "https://example.com/product/nike-air-max-90"
+freshness: daily
+
+media:
+  cover:
+    url: /uploads/nike-air-max-90-hero.webp
+    alt: "Nike Air Max 90 - White/Black colorway"
+  images: 6
+  video: 1
 
 actions:
   - name: add_to_cart

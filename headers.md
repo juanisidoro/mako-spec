@@ -21,13 +21,23 @@ Accept: text/mako+markdown, text/markdown;q=0.8, text/html;q=0.5
 
 ## Response Headers
 
-### Required Headers
+MAKO classifies response headers into three levels using [RFC 2119](https://datatracker.ietf.org/doc/html/rfc2119) keywords. The rationale: Required headers are the minimum for a valid MAKO response, Recommended headers reuse standard HTTP semantics for caching and interoperability, and Optional headers add value for advanced agent capabilities.
 
-These headers MUST be present in every MAKO response:
+### Required (MUST)
+
+Without these, the response is **not a valid MAKO response**. They enable an agent to identify the format, evaluate relevance, and make pre-download decisions from a HEAD request alone.
+
+#### `Content-Type`
+
+Identifies the response as MAKO content.
+
+```http
+Content-Type: text/mako+markdown; charset=utf-8
+```
 
 #### `X-Mako-Version`
 
-The MAKO specification version.
+The MAKO protocol version. Allows agents to check compatibility before parsing.
 
 ```http
 X-Mako-Version: 1.0
@@ -35,7 +45,7 @@ X-Mako-Version: 1.0
 
 #### `X-Mako-Tokens`
 
-Estimated token count of the response body (excluding headers and frontmatter).
+Estimated token count of the response body (excluding headers and frontmatter). Agents use this for budget decisions — "can I afford to read this page?"
 
 ```http
 X-Mako-Tokens: 280
@@ -43,7 +53,7 @@ X-Mako-Tokens: 280
 
 #### `X-Mako-Type`
 
-The content type of the page (see spec.md Section 5).
+Content type of the page (see spec.md Section 5). Agents use this to filter by category — "I only want products".
 
 ```http
 X-Mako-Type: product
@@ -51,25 +61,71 @@ X-Mako-Type: product
 
 #### `X-Mako-Lang`
 
-Content language in BCP 47 format.
+Content language in BCP 47 format. Agents use this to filter by locale.
 
 ```http
 X-Mako-Lang: en
 ```
 
-#### `Content-Type`
+#### `Vary`
 
-Standard HTTP content type header:
+**REQUIRED** to ensure CDNs cache HTML and MAKO responses separately for the same URL.
 
 ```http
-Content-Type: text/mako+markdown; charset=utf-8
+Vary: Accept
 ```
 
-### Optional Headers
+### Recommended (SHOULD)
+
+Standard HTTP headers that improve caching, conditional requests, and interoperability. MAKO does not define custom headers for these concerns — it reuses existing HTTP semantics.
+
+#### `ETag`
+
+Content fingerprint. Enables conditional requests via `If-None-Match`, allowing agents to receive a `304 Not Modified` response (0 bytes) when content hasn't changed.
+
+```http
+ETag: "mako-a1b2c3"
+```
+
+#### `Cache-Control`
+
+Caching strategy. Servers SHOULD set `max-age` based on the `freshness` field in YAML frontmatter (see Mapping section below).
+
+```http
+Cache-Control: public, max-age=86400
+```
+
+#### `Last-Modified`
+
+Last content update timestamp in HTTP-date format (RFC 7232). Replaces the need for a custom update header.
+
+```http
+Last-Modified: Mon, 30 Jan 2023 00:00:00 GMT
+```
+
+#### `Content-Location`
+
+Canonical URL of the HTML version of this page, if different from the request URL. Standard HTTP header (RFC 7231 §3.1.4.2).
+
+```http
+Content-Location: https://example.com/product/nike-air-max-90
+```
+
+### Optional (MAY)
+
+Extra metadata for advanced agent capabilities. Not required for a valid response, but adds value for discovery and semantic pre-filtering.
+
+#### `X-Mako-Actions`
+
+Comma-separated list of available action names. Allows agents to discover capabilities from a HEAD request without downloading the body.
+
+```http
+X-Mako-Actions: add_to_cart, check_availability, compare
+```
 
 #### `X-Mako-Embedding`
 
-CEF-encoded embedding vector (see cef.md). Enables pre-download relevance filtering.
+CEF-encoded embedding vector (see cef.md). Enables semantic relevance scoring before downloading: the agent decodes the embedding, computes cosine similarity against its query, and decides whether to GET.
 
 ```http
 X-Mako-Embedding: H4sIAAAAAAAAA2NgGAWjYBSMglEwCkYBNQEAN8zuSAAQAAA
@@ -77,7 +133,7 @@ X-Mako-Embedding: H4sIAAAAAAAAA2NgGAWjYBSMglEwCkYBNQEAN8zuSAAQAAA
 
 #### `X-Mako-Embedding-Model`
 
-Identifier of the embedding model used. REQUIRED when `X-Mako-Embedding` is present.
+Identifier of the embedding model used. **REQUIRED** when `X-Mako-Embedding` is present.
 
 ```http
 X-Mako-Embedding-Model: mako-cef-v1
@@ -85,18 +141,10 @@ X-Mako-Embedding-Model: mako-cef-v1
 
 #### `X-Mako-Embedding-Dim`
 
-Number of dimensions in the original embedding vector. REQUIRED when `X-Mako-Embedding` is present.
+Number of dimensions in the original embedding vector. **REQUIRED** when `X-Mako-Embedding` is present.
 
 ```http
 X-Mako-Embedding-Dim: 512
-```
-
-#### `X-Mako-Actions`
-
-Comma-separated list of available action names. Allows agents to discover actions from headers alone.
-
-```http
-X-Mako-Actions: add_to_cart, check_availability, compare
 ```
 
 ## Complete Response Example
@@ -178,26 +226,7 @@ Content-Type: text/html; charset=utf-8
 
 Agents MUST handle both cases gracefully.
 
-## Caching and Standard HTTP Headers
-
-MAKO relies on standard HTTP caching mechanisms rather than custom headers for freshness, timestamps, and canonical URLs. This avoids reinventing HTTP semantics.
-
-### Required
-
-| Header | Description |
-|--------|-------------|
-| `Vary: Accept` | **REQUIRED.** Ensures CDNs serve HTML vs MAKO correctly based on request. |
-
-### Recommended
-
-| Header | Description |
-|--------|-------------|
-| `ETag` | Content fingerprint for conditional requests (`If-None-Match`). |
-| `Cache-Control` | Caching strategy (e.g., `public, max-age=3600`). |
-| `Last-Modified` | Last content update timestamp (replaces the need for a custom update header). |
-| `Content-Location` | Canonical URL of the HTML version, if different from the request URL. |
-
-### Mapping `freshness` to `Cache-Control`
+## Mapping `freshness` to `Cache-Control`
 
 The `freshness` field in YAML frontmatter declares the content's update cadence. Servers SHOULD set `Cache-Control: max-age` accordingly:
 
@@ -210,11 +239,3 @@ The `freshness` field in YAML frontmatter declares the content's update cadence.
 | `monthly` | `2592000` |
 | `static` | `31536000` |
 
-### Example
-
-```http
-Vary: Accept
-ETag: "mako-a1b2c3"
-Cache-Control: public, max-age=86400
-Last-Modified: 2026-02-13T10:30:00Z
-```

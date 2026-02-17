@@ -1,7 +1,7 @@
 # CEF — Compact Embedding Format v0.1.0
 
 **Status:** Draft
-**Last Updated:** 2026-02-13
+**Last Updated:** 2026-02-17
 
 ## 1. Introduction
 
