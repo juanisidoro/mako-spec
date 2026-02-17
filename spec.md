@@ -450,28 +450,47 @@ Servers SHOULD support `HEAD` requests that return MAKO headers without the body
 
 ### 6.3 Discovery
 
-Servers SHOULD advertise MAKO support in HTML pages using:
+MAKO defines three complementary discovery mechanisms:
 
-```html
-<link rel="alternate" type="text/mako+markdown" href="/page.mako.md">
-```
+#### Site-level: `/.well-known/mako`
 
-Servers MAY also provide a discovery endpoint at `/.well-known/mako`:
+Servers MAY provide a discovery endpoint at `/.well-known/mako` declaring site-level capabilities:
 
 ```json
 {
   "mako": "1.0",
   "site": "example.com",
-  "content_negotiation": true,
-  "html_embedding": true,
   "accept": "text/mako+markdown",
+  "features": {
+    "content_negotiation": true,
+    "html_embedding": true
+  },
+  "sitemap": "/mako-sitemap.json",
   "spec": "https://makospec.vercel.app"
 }
 ```
 
-The discovery endpoint declares **site-level** MAKO capabilities. Required fields: `mako` (protocol version) and `site` (domain). All other fields are optional.
+Required fields: `mako` (protocol version) and `site` (domain). The `features` object declares which delivery mechanisms are enabled. The `sitemap` field is optional — servers that maintain a dedicated MAKO page listing MAY include a reference to it.
 
-For **page-level** discovery, servers SHOULD use a standard sitemap or a dedicated MAKO sitemap (e.g., `/mako-sitemap.json`) listing individual pages with their type, token count, and last update date.
+#### Page-level: HTML `<link>` element
+
+Servers SHOULD advertise MAKO support in HTML pages using a standard alternate link:
+
+```html
+<link rel="alternate" type="text/mako+markdown">
+```
+
+This tells agents that the same URL serves MAKO content when requested with `Accept: text/mako+markdown`. No separate URL is needed — content negotiation handles the switch.
+
+#### Page-level: HTML `<script>` element
+
+When `html_embedding` is enabled (see Section 6.4), agents can discover embedded MAKO content directly in the HTML `<head>`:
+
+```html
+<script type="text/mako+markdown" id="mako">
+```
+
+This allows agents to extract MAKO content without content negotiation, enabling immediate adoption without requiring changes from LLM providers or crawlers.
 
 ### 6.4 HTML Embedding
 
