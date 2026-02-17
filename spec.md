@@ -38,6 +38,19 @@ A MAKO file is a UTF-8 encoded Markdown document with a YAML frontmatter block. 
 [Markdown body]
 ```
 
+Producers MAY include YAML comments in the frontmatter block for identification:
+
+```yaml
+---
+# @mako — Machine-Accessible Knowledge Object
+# Spec: https://makospec.vercel.app
+mako: "1.0"
+...
+---
+```
+
+Comments are ignored by parsers and have no semantic meaning.
+
 ### 2.2 Frontmatter (Required Fields)
 
 | Field | Type | Required | Description |
@@ -61,7 +74,7 @@ A MAKO file is a UTF-8 encoded Markdown document with a YAML frontmatter block. 
 | `related` | array | No | Related page paths |
 | `tags` | array | No | Content tags/categories |
 | `audience` | string | No | Target audience (e.g., `"developers"`, `"consumers"`) |
-| `freshness` | string | No | Content freshness: `"realtime"`, `"daily"`, `"weekly"`, `"static"` |
+| `freshness` | string | No | Content freshness: `"realtime"`, `"hourly"`, `"daily"`, `"weekly"`, `"monthly"`, `"static"` |
 | `media` | object | No | Available media on the source page (see Section 2.5) |
 
 ### 2.5 Media Metadata
@@ -542,9 +555,9 @@ See [headers.md](headers.md) for the complete HTTP headers reference.
 | `X-Mako-Embedding` | No | CEF-encoded embedding vector |
 | `X-Mako-Embedding-Model` | No | Embedding model identifier |
 | `X-Mako-Embedding-Dim` | No | Embedding dimensions |
-| `X-Mako-Updated` | No | Last update timestamp |
-| `X-Mako-Freshness` | No | Content freshness indicator |
 | `X-Mako-Actions` | No | Comma-separated action names |
+
+Servers SHOULD also include standard HTTP caching headers (`ETag`, `Cache-Control`, `Last-Modified`, `Vary: Accept`). These replace the need for custom headers for freshness, update timestamps, and canonical URLs — see [headers.md](headers.md) for details.
 
 ## 8. Compact Embedding Format (CEF)
 

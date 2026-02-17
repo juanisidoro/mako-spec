@@ -1,7 +1,7 @@
 # MAKO HTTP Headers Reference
 
 **Status:** Draft
-**Last Updated:** 2026-02-13
+**Last Updated:** 2026-02-17
 
 ## Request Headers
 
@@ -91,46 +91,12 @@ Number of dimensions in the original embedding vector. REQUIRED when `X-Mako-Emb
 X-Mako-Embedding-Dim: 512
 ```
 
-#### `X-Mako-Updated`
-
-ISO 8601 timestamp of the last content update.
-
-```http
-X-Mako-Updated: 2026-02-13T10:30:00Z
-```
-
-#### `X-Mako-Freshness`
-
-How frequently the content changes. Helps agents decide caching strategy.
-
-```http
-X-Mako-Freshness: daily
-```
-
-Values: `realtime`, `hourly`, `daily`, `weekly`, `monthly`, `static`
-
 #### `X-Mako-Actions`
 
 Comma-separated list of available action names. Allows agents to discover actions from headers alone.
 
 ```http
 X-Mako-Actions: add_to_cart, check_availability, compare
-```
-
-#### `X-Mako-Entity`
-
-The primary entity described by the page.
-
-```http
-X-Mako-Entity: Nike Air Max 90
-```
-
-#### `X-Mako-Canonical`
-
-URL of the HTML version of this page.
-
-```http
-X-Mako-Canonical: https://example.com/product/nike-air-max-90
 ```
 
 ## Complete Response Example
@@ -149,14 +115,14 @@ X-Mako-Version: 1.0
 X-Mako-Tokens: 280
 X-Mako-Type: product
 X-Mako-Lang: en
-X-Mako-Entity: Nike Air Max 90
-X-Mako-Updated: 2026-02-13T10:30:00Z
-X-Mako-Freshness: daily
 X-Mako-Actions: add_to_cart, check_availability
 X-Mako-Embedding: H4sIAAAAAAAAA2NgGAWjYBSMglEwCkYBNQEAN8zuSAAQAAA
 X-Mako-Embedding-Model: mako-cef-v1
 X-Mako-Embedding-Dim: 512
-X-Mako-Canonical: https://example.com/product/nike-air-max-90
+Vary: Accept
+ETag: "mako-a1b2c3"
+Cache-Control: public, max-age=86400
+Last-Modified: 2026-02-13T10:30:00Z
 Content-Length: 0
 ```
 
@@ -174,9 +140,10 @@ X-Mako-Version: 1.0
 X-Mako-Tokens: 280
 X-Mako-Type: product
 X-Mako-Lang: en
-X-Mako-Embedding: H4sIAAAAAAAAA2NgGAWjYBSMglEwCkYBNQEAN8zuSAAQAAA
-X-Mako-Embedding-Model: mako-cef-v1
-X-Mako-Embedding-Dim: 512
+X-Mako-Actions: add_to_cart, check_availability
+Vary: Accept
+ETag: "mako-a1b2c3"
+Cache-Control: public, max-age=86400
 
 ---
 mako: "1.0"
@@ -185,6 +152,8 @@ entity: "Nike Air Max 90"
 updated: 2026-02-13
 tokens: 280
 language: en
+canonical: "https://example.com/product/nike-air-max-90"
+freshness: daily
 ...
 ---
 
@@ -209,14 +178,43 @@ Content-Type: text/html; charset=utf-8
 
 Agents MUST handle both cases gracefully.
 
-## Caching
+## Caching and Standard HTTP Headers
 
-MAKO responses are cacheable. Servers SHOULD include standard HTTP caching headers:
+MAKO relies on standard HTTP caching mechanisms rather than custom headers for freshness, timestamps, and canonical URLs. This avoids reinventing HTTP semantics.
+
+### Required
+
+| Header | Description |
+|--------|-------------|
+| `Vary: Accept` | **REQUIRED.** Ensures CDNs serve HTML vs MAKO correctly based on request. |
+
+### Recommended
+
+| Header | Description |
+|--------|-------------|
+| `ETag` | Content fingerprint for conditional requests (`If-None-Match`). |
+| `Cache-Control` | Caching strategy (e.g., `public, max-age=3600`). |
+| `Last-Modified` | Last content update timestamp (replaces the need for a custom update header). |
+| `Content-Location` | Canonical URL of the HTML version, if different from the request URL. |
+
+### Mapping `freshness` to `Cache-Control`
+
+The `freshness` field in YAML frontmatter declares the content's update cadence. Servers SHOULD set `Cache-Control: max-age` accordingly:
+
+| `freshness` | Suggested `max-age` |
+|-------------|---------------------|
+| `realtime` | `0` (no-cache) |
+| `hourly` | `3600` |
+| `daily` | `86400` |
+| `weekly` | `604800` |
+| `monthly` | `2592000` |
+| `static` | `31536000` |
+
+### Example
 
 ```http
-Cache-Control: public, max-age=3600
-ETag: "mako-abc123"
 Vary: Accept
+ETag: "mako-a1b2c3"
+Cache-Control: public, max-age=86400
+Last-Modified: 2026-02-13T10:30:00Z
 ```
-
-The `Vary: Accept` header is REQUIRED to ensure CDNs serve the correct version (HTML vs MAKO) based on the request.
