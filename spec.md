@@ -454,23 +454,15 @@ MAKO defines three complementary discovery mechanisms:
 
 #### Site-level: `/.well-known/mako`
 
-Servers MAY provide a discovery endpoint at `/.well-known/mako` declaring site-level capabilities:
+Servers MAY provide a discovery endpoint at `/.well-known/mako` declaring MAKO support:
 
 ```json
 {
-  "mako": "1.0",
-  "site": "example.com",
-  "accept": "text/mako+markdown",
-  "features": {
-    "content_negotiation": true,
-    "html_embedding": true
-  },
-  "sitemap": "/mako-sitemap.json",
-  "spec": "https://makospec.vercel.app"
+  "mako": "1.0"
 }
 ```
 
-Required fields: `mako` (protocol version) and `site` (domain). The `features` object declares which delivery mechanisms are enabled. The `sitemap` field is optional — servers that maintain a dedicated MAKO page listing MAY include a reference to it.
+The only required field is `mako` — the protocol version. This minimal response is sufficient for agents to confirm MAKO support. Implementations MAY include additional fields, but the protocol intentionally keeps discovery lightweight.
 
 #### Page-level: HTML `<link>` element
 
