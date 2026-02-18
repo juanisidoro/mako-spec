@@ -613,6 +613,39 @@ HTML embedding follows the same adoption pattern as JSON-LD:
 
 The MIME type `text/mako+markdown` is not yet registered with IANA (see §12). Some CDN providers, security proxies, or WAF configurations may strip `<script>` tags with unrecognized `type` attributes. Implementors SHOULD verify that their delivery pipeline preserves `<script type="text/mako+markdown">` elements intact. Content negotiation (§6.1) is not affected by this limitation, as it operates at the HTTP level rather than within the HTML document.
 
+### 6.5 Single Page Applications
+
+MAKO is rendering-agnostic. The content negotiation mechanism operates at the server level, independent of how the client renders the page.
+
+Single Page Applications (SPAs) serve a minimal HTML shell and render content via JavaScript in the browser. AI agents do not execute JavaScript. Without MAKO, an agent visiting a SPA receives an empty `<div>` — no content, no metadata, no structure.
+
+The server that powers a SPA already has the data: it serves it as JSON to the frontend via API routes. MAKO adds one more response format to the same server:
+
+```
+Browser request:   Accept: text/html          → HTML shell + JS bundle
+SPA frontend:      Accept: application/json   → JSON data via API
+MAKO agent:        Accept: text/mako+markdown → Structured MAKO document
+```
+
+Same URL, same server, same data. Only the `Accept` header changes.
+
+#### Implementation by Architecture
+
+| Architecture | MAKO Mechanism | Dynamic Routes |
+|-------------|----------------|:-:|
+| SSR frameworks (Next.js, Nuxt, Remix, SvelteKit) | Server middleware or route handler | Yes |
+| Edge-rendered (Cloudflare Workers, Vercel Edge) | Edge function intercepts request | Yes |
+| Static site generation (Astro, Gatsby, Next.js SSG) | Build-time `<script>` embedding per page | Yes (at build time) |
+| Client-only SPA (plain React, Vue, Angular) | API backend or edge function | Yes |
+
+For **client-only SPAs with dynamic routes**, the HTML embedding mechanism (§6.4) alone is insufficient: the static `index.html` is identical for all routes, so route-specific MAKO content cannot be embedded without server-side logic. Content negotiation at the server or edge layer is the canonical solution.
+
+For **static or pre-rendered pages** (home, about, landing), HTML embedding via `<script>` works without any server-side changes.
+
+#### Freshness
+
+Content negotiation provides fresher data than embedded `<script>` elements. An embedded `<script>` reflects the state at page generation time and remains stale until the HTML is regenerated. Content negotiation responds in real time from the API or database. For applications serving frequently changing data (prices, stock, availability), servers SHOULD use content negotiation with short-lived `Cache-Control` values and `ETag` headers (§6.2).
+
 ## 7. HTTP Headers
 
 See [headers.md](headers.md) for the complete HTTP headers reference.
