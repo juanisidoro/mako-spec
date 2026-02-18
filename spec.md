@@ -530,7 +530,24 @@ Servers SHOULD advertise MAKO support in HTML pages using a standard alternate l
 <link rel="alternate" type="text/mako+markdown">
 ```
 
-This tells agents that the same URL serves MAKO content when requested with `Accept: text/mako+markdown`. No separate URL is needed — content negotiation handles the switch.
+When the `href` attribute is **omitted**, the link signals that the **same URL** serves MAKO content when requested with `Accept: text/mako+markdown` — standard content negotiation.
+
+When the `href` attribute is **present**, it specifies an **explicit endpoint** that serves the MAKO content for this page:
+
+```html
+<link rel="alternate" type="text/mako+markdown" href="https://example.com/api/mako?path=/product/123">
+```
+
+This is a valid and practical implementation strategy: the publisher exposes a dedicated MAKO endpoint (e.g., `/api/mako`) that serves MAKO content for any page via a path parameter. Each HTML page includes a `<link>` pointing to its corresponding MAKO URL. The endpoint URL does not need to match the page URL — the `<link>` element is simply the discovery mechanism.
+
+Both patterns are equally valid:
+
+| Pattern | `<link>` | Agent retrieval |
+|---------|----------|-----------------|
+| Content negotiation | `<link rel="alternate" type="text/mako+markdown">` | GET same URL with `Accept: text/mako+markdown` |
+| Explicit endpoint | `<link rel="alternate" type="text/mako+markdown" href="...">` | GET the `href` URL directly |
+
+This flexibility allows servers that cannot modify response headers or implement content negotiation (e.g., static hosting, shared hosting, CDNs) to still serve MAKO content via a separate endpoint.
 
 #### Page-level: HTML `<script>` element
 
@@ -544,7 +561,9 @@ This allows agents to extract MAKO content without content negotiation, enabling
 
 ### 6.4 HTML Embedding
 
-MAKO content MAY be embedded directly in HTML pages using a `<script>` tag in the document `<head>`. This allows agents that parse HTML to extract MAKO content without content negotiation, enabling immediate adoption without requiring changes from LLM providers or crawlers.
+MAKO content MAY be embedded directly in HTML pages using a `<script>` tag in the document `<head>`. This is a **fallback mechanism** for sites that **cannot implement server-side content negotiation** — for example, static sites, client-only SPAs without a backend, or environments where modifying HTTP response headers is not possible.
+
+Sites that already support content negotiation (via middleware, edge functions, or server-side routing) do **not** need HTML embedding. Content negotiation is the preferred delivery mechanism: it is more efficient (agents download only the MAKO content, not the full HTML page) and provides fresher data (see §6.5 Freshness).
 
 ```html
 <head>
@@ -595,11 +614,21 @@ Piel natural vs sintética en competidores a precio similar.
 
 #### Why HTML Embedding
 
-HTML embedding follows the same adoption pattern as JSON-LD:
+HTML embedding is designed for adoption scenarios where content negotiation is not available. It follows the same pattern as JSON-LD:
 
-1. **Works today** — LLMs and crawlers already parse HTML. No protocol changes needed.
+1. **Works today** — LLMs and crawlers already parse HTML. No server-side changes required.
 2. **Publisher controlled** — The publisher decides exactly what the agent sees.
 3. **Progressive enhancement** — HTML embedding coexists with content negotiation. Agents that support `Accept: text/mako+markdown` get the optimized response; agents that only parse HTML still find the MAKO content in the `<script>` tag.
+
+**When to use HTML embedding vs content negotiation:**
+
+| Scenario | Recommended mechanism |
+|----------|----------------------|
+| Server-side framework (Next.js, Express, WordPress, etc.) | Content negotiation via middleware |
+| Edge function available (Cloudflare Workers, Vercel Edge) | Content negotiation at the edge |
+| Static site with API backend | `<link>` pointing to API endpoint |
+| Fully static site, no backend | HTML embedding via `<script>` |
+| Client-only SPA, no server | HTML embedding for static routes; API endpoint for dynamic routes |
 
 #### Rules
 
