@@ -1,7 +1,7 @@
 # MAKO Specification v0.1.0
 
 **Status:** Draft
-**Last Updated:** 2026-02-16
+**Last Updated:** 2026-02-18
 
 > **Versioning note:** `v0.1.0` is the version of this *specification document*. The protocol version used in MAKO frontmatter is `"1.0"` (the `mako` field). These are distinct: the document version tracks spec revisions, while the protocol version identifies the format that agents negotiate. When the protocol itself introduces breaking changes, the frontmatter version will increment.
 
@@ -12,9 +12,9 @@ MAKO (Markdown Agent Knowledge Optimization) is an open standard that defines ho
 ### 1.1 Goals
 
 - Define a per-page content format optimized for LLM consumption
-- Enable pre-download relevance filtering via compact embeddings in HTTP headers
 - Declare available actions, semantic links, and metadata alongside content
 - Minimize token usage while maximizing information density
+- Enable pre-download relevance filtering via HTTP headers (type, language, tokens)
 - Complement existing standards (WebMCP, llms.txt) without replacing them
 
 ### 1.2 Non-Goals
@@ -432,6 +432,41 @@ Any content that doesn't fit the above types. MUST still follow the general body
 
 ## 6. Content Negotiation
 
+MAKO assumes the agent is an **HTTP client** capable of sending custom `Accept` headers and parsing HTTP response headers. This is the primary access model. Agents that can additionally parse HTML gain access to supplementary discovery mechanisms (see §6.4). MAKO does not require JavaScript execution at any point.
+
+When an agent encounters a URL with no MAKO support, it MUST fail silently and process the response as standard HTML. Specifically, an agent concludes that a URL does not support MAKO only when **all four** of the following conditions are true:
+
+1. HEAD response does not include `Content-Type: text/mako+markdown`
+2. HEAD response does not include a `Link` header with `rel="alternate" type="text/mako+markdown"`
+3. GET response does not include `Content-Type: text/mako+markdown`
+4. The HTML body (if received) does not contain `<script type="text/mako+markdown">` or `<link rel="alternate" type="text/mako+markdown">`
+
+#### Recommended Agent Flow
+
+The following sequence describes the recommended interaction pattern. Each step is independent — agents MAY skip to any step based on prior knowledge.
+
+```
+1. GET /.well-known/mako
+   → 200: site declares MAKO support (positive signal)
+   → 404: MAKO support unknown (NOT a negative signal — the site
+          may support content negotiation without a discovery endpoint)
+
+2. HEAD <url> with Accept: text/mako+markdown
+   → Evaluate X-Mako-* headers for relevance (type, language, tokens)
+   → No body downloaded — pre-filter decision at near-zero cost
+
+3. GET <url> with Accept: text/mako+markdown
+   → Content-Type: text/mako+markdown → MAKO document received, done
+   → Content-Type: text/html → no content negotiation support, go to step 4
+
+4. Parse the HTML already received in step 3 (no additional request)
+   → Look for <script type="text/mako+markdown"> → extract inline MAKO
+   → Look for <link rel="alternate" type="text/mako+markdown"> → follow link
+   → Neither found → URL does not support MAKO
+```
+
+A minimal agent uses only step 3. A sophisticated agent uses all four steps for maximum efficiency. MAKO scales with agent capability.
+
 ### 6.1 Accept Header
 
 Agents request MAKO content using the `Accept` header:
@@ -446,7 +481,30 @@ If the server does not support MAKO, standard HTTP content negotiation applies (
 
 ### 6.2 HEAD Requests
 
-Servers SHOULD support `HEAD` requests that return MAKO headers without the body. This enables agents to check embeddings for relevance before downloading content.
+Servers SHOULD support `HEAD` requests that return MAKO headers without the body. This enables agents to evaluate metadata (type, language, token count) for relevance before downloading content.
+
+Servers SHOULD include an `ETag` header in all MAKO responses (both HEAD and GET). Without a server-provided ETag, the conditional request mechanisms described below have no basis to operate.
+
+#### Coherence Between HEAD and GET
+
+The HEAD and GET responses are **not atomic**. Content may change between the two requests (e.g., price updates, stock changes). Agents MUST NOT assume that metadata evaluated during a HEAD request is coherent with a subsequent GET response.
+
+To verify coherence, agents SHOULD include `If-None-Match` with the ETag from the HEAD response when making the subsequent GET:
+
+```http
+HEAD /product/123
+Accept: text/mako+markdown
+→ ETag: "mako-a1b2c3"
+→ X-Mako-Tokens: 280
+
+GET /product/123
+Accept: text/mako+markdown
+If-None-Match: "mako-a1b2c3"
+→ 304 Not Modified (content matches HEAD snapshot)
+→ 200 OK (content changed since HEAD — re-evaluate)
+```
+
+A `304` confirms the GET content matches the HEAD metadata. A `200` indicates the content has changed and the agent should re-evaluate rather than rely on previously inspected headers.
 
 ### 6.3 Discovery
 
@@ -551,6 +609,10 @@ HTML embedding follows the same adoption pattern as JSON-LD:
 4. If both HTML embedding and content negotiation are available, agents SHOULD prefer content negotiation (lower bandwidth).
 5. There MUST be at most one `<script type="text/mako+markdown">` tag per page.
 
+#### Delivery Considerations
+
+The MIME type `text/mako+markdown` is not yet registered with IANA (see §12). Some CDN providers, security proxies, or WAF configurations may strip `<script>` tags with unrecognized `type` attributes. Implementors SHOULD verify that their delivery pipeline preserves `<script type="text/mako+markdown">` elements intact. Content negotiation (§6.1) is not affected by this limitation, as it operates at the HTTP level rather than within the HTML document.
+
 ## 7. HTTP Headers
 
 See [headers.md](headers.md) for the complete HTTP headers reference.
@@ -588,11 +650,13 @@ Extra metadata for advanced agent capabilities. Not required for a valid respons
 | Header | Description | Example |
 |--------|-------------|---------|
 | `X-Mako-Actions` | Comma-separated action names — capability discovery in HEAD | `add_to_cart, share` |
-| `X-Mako-Embedding` | CEF-encoded embedding vector — semantic pre-filtering without body | `H4sIAAAA...` |
-| `X-Mako-Embedding-Model` | Embedding model identifier (REQUIRED if `X-Mako-Embedding` is present) | `mako-cef-v1` |
-| `X-Mako-Embedding-Dim` | Embedding dimensions (REQUIRED if `X-Mako-Embedding` is present) | `512` |
+| `X-Mako-Embedding` | **EXPERIMENTAL.** CEF-encoded embedding vector — semantic pre-filtering without body (see §8) | `H4sIAAAA...` |
+| `X-Mako-Embedding-Model` | **EXPERIMENTAL.** Embedding model identifier (REQUIRED if `X-Mako-Embedding` is present) | `nomic-embed-text` |
+| `X-Mako-Embedding-Dim` | **EXPERIMENTAL.** Embedding dimensions (REQUIRED if `X-Mako-Embedding` is present) | `512` |
 
-## 8. Compact Embedding Format (CEF)
+## 8. Compact Embedding Format (CEF) — EXPERIMENTAL
+
+> **Status: EXPERIMENTAL.** This feature is defined for early adopters and is subject to change in future versions. Interoperability across different embedding models is not guaranteed. Implementations SHOULD NOT depend on cross-provider embedding compatibility. Level 1 and Level 2 conformance (§9.1) do not require CEF.
 
 See [cef.md](cef.md) for the full CEF specification.
 
@@ -600,21 +664,52 @@ See [cef.md](cef.md) for the full CEF specification.
 
 CEF defines how to compress embedding vectors for transport in HTTP headers:
 
-1. **Quantize** — float32 to int8 (75% size reduction)
+1. **Quantize** — float32 to int8 via symmetric per-tensor quantization
 2. **Compress** — gzip (variable reduction)
 3. **Encode** — base64url (HTTP-safe encoding)
 
 Result: a 512-dimension embedding fits in ~470 bytes.
 
+### 8.2 Quantization Scheme
+
+CEF uses **symmetric per-tensor int8 quantization**. The dequantization formula is:
+
+```
+scale = max(abs(min(v)), abs(max(v))) / 127
+quantized[i] = round(v[i] / scale)
+dequantized[i] = quantized[i] * scale
+```
+
+Where `v` is the original float32 vector. The `scale` factor MUST be stored as the first 4 bytes (float32, little-endian) of the compressed payload, followed by the int8 values.
+
+Implementations MUST use this exact scheme. Two conforming implementations using the same embedding model MUST produce compatible quantized vectors.
+
+### 8.3 Model Declaration
+
+Servers that include `X-Mako-Embedding` MUST declare the model via `X-Mako-Embedding-Model` and the dimensions via `X-Mako-Embedding-Dim`. Agents SHOULD skip relevance filtering if the declared model is unknown to them.
+
+The RECOMMENDED reference model is **`nomic-embed-text`** (512 dimensions, open weights, Apache-2.0 license, available via multiple inference providers). This recommendation is not mandatory — implementations MAY use any embedding model provided it is declared in the headers.
+
+Cosine similarity between embeddings from different models is mathematically meaningless. The model declaration exists so that agents can determine compatibility before computing similarity, avoiding silent incorrect results.
+
+### 8.4 Interoperability
+
+Embedding interoperability requires that server and agent use the same embedding model. For the open web, where server and agent implementations are independent, this is not guaranteed. The practical implications are:
+
+- **Same-provider deployments** (e.g., your agent querying your own MAKO-enabled site): full interoperability with any model.
+- **Open web**: agents ignore embeddings from unknown models and fall back to downloading the MAKO body for evaluation. No functionality is lost — only the pre-filtering optimization is unavailable.
+
 ## 9. Conformance
 
 ### 9.1 MAKO Levels
 
-| Level | Requirements |
-|-------|-------------|
-| **Level 1** | Valid frontmatter + optimized markdown body |
-| **Level 2** | Level 1 + HTTP content negotiation + response headers |
-| **Level 3** | Level 2 + CEF embedding in headers |
+| Level | Requirements | Status |
+|-------|-------------|--------|
+| **Level 1** | Valid frontmatter + optimized markdown body | Stable |
+| **Level 2** | Level 1 + HTTP content negotiation + response headers | Stable |
+| **Level 3** | Level 2 + CEF embedding in headers (§8) | **Experimental** |
+
+Level 1 and Level 2 are stable and self-contained. A conforming implementation needs only Level 1 or Level 2 — there is no requirement to implement Level 3. Level 3 is subject to change in future versions as the embedding ecosystem matures.
 
 ### 9.2 Validation
 
@@ -638,6 +733,8 @@ A MAKO file is valid if:
 - Servers SHOULD respect `robots.txt` directives for MAKO content
 
 ### 10.2 Untrusted Embeddings
+
+> This section applies to implementations that use the experimental CEF feature (§8).
 
 The `X-Mako-Embedding` header is provided by the content publisher and MUST be treated as **untrusted input**. Embeddings are a hint for pre-filtering, not a guarantee of relevance or quality.
 
@@ -673,9 +770,23 @@ Consumers MUST implement their own spam detection, quality scoring, and ranking 
 
 ### 10.5 Embedding Privacy
 
+> This section applies to implementations that use the experimental CEF feature (§8).
+
 - Embedding vectors represent semantic content, not source text — the original text cannot be reconstructed from an embedding
 - Embedding vectors MUST NOT encode personally identifiable information
 - Servers MUST NOT embed user-specific information in CEF vectors
+
+### 10.6 Authentication and Metadata Exposure
+
+Servers MUST NOT include `X-Mako-*` headers in `401 Unauthorized` or `403 Forbidden` responses. Exposing content metadata (type, token count, language, actions) on authentication failures enables **resource enumeration attacks**: an unauthenticated actor can map private resources, their types, sizes, and languages by issuing HEAD requests across URL ranges.
+
+For authenticated MAKO content, the standard HTTP flow applies:
+
+1. The agent includes authentication credentials (e.g., `Authorization: Bearer <token>`) in the request
+2. If authenticated, the server responds with the full MAKO response including `X-Mako-*` headers
+3. If not authenticated, the server responds with `401` or `403` with no MAKO-specific headers
+
+Discovery of authenticated MAKO endpoints SHOULD use `/.well-known/mako` with appropriate scope declarations rather than per-URL probing.
 
 ## 11. Privacy Considerations
 
@@ -687,7 +798,15 @@ Consumers MUST implement their own spam detection, quality scoring, and ranking 
 
 This specification defines the media type `text/mako+markdown` which SHOULD be registered with IANA upon standardization.
 
-## 13. References
+## 13. Future Directions
+
+The following capabilities are defined as experimental in this version and are candidates for stabilization in future revisions:
+
+- **Semantic pre-filtering via embeddings (§8):** CEF enables agents to evaluate content relevance from HTTP headers alone, without downloading the body. The current challenge is embedding model interoperability across independent implementations. A future version may define a canonical model or a negotiation mechanism (e.g., `Accept-Mako-Embedding-Models` header) once the embedding ecosystem matures.
+- **Authenticated content discovery:** Patterns for discovering MAKO-enabled content behind authentication, beyond the current standard HTTP auth flow (§10.6).
+- **Site-level manifests:** Extended `/.well-known/mako` schemas that declare available content types, supported languages, and embedding models at the site level.
+
+## 14. References
 
 - [llms.txt Specification](https://llmstxt.org/)
 - [WebMCP W3C Specification](https://webmachinelearning.github.io/webmcp/)
